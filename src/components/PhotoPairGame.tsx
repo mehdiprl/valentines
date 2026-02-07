@@ -2,10 +2,10 @@
 
 import { motion } from "framer-motion";
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId, useMemo } from "react";
 
 // 18 images
-const images = [
+const sourceImages = [
   "/game-photos/1.avif",
   "/game-photos/2.avif",
   "/game-photos/3.avif",
@@ -27,11 +27,29 @@ const images = [
 ];
 
 // Create 18 pairs of images (36 images in total)
-const imagePairs = images.flatMap((image) => [image, image]);
+const imagePairs = sourceImages.flatMap((image) => [image, image]);
 
-const shuffleArray = (array: string[]) => {
+const createSeededRandom = (seed: number) => {
+  let value = seed >>> 0;
+  return () => {
+    value = (Math.imul(value, 1664525) + 1013904223) >>> 0;
+    return value / 4294967296;
+  };
+};
+
+const stringToSeed = (value: string) => {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+};
+
+const shuffleArray = (array: string[], seed: number) => {
+  const random = createSeededRandom(seed);
   for (let i = array.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(random() * (i + 1));
     [array[i], array[j]] = [array[j], array[i]];
   }
   return array;
@@ -54,19 +72,24 @@ type ValentinesProposalProps = {
 export default function PhotoPairGame({
   handleShowProposal,
 }: ValentinesProposalProps) {
+  const gameId = useId();
+  const gameImages = useMemo(
+    () => shuffleArray([...imagePairs], stringToSeed(gameId)),
+    [gameId],
+  );
   const [selected, setSelected] = useState<number[]>([]);
   const [matched, setMatched] = useState<number[]>([]);
   const [incorrect, setIncorrect] = useState<number[]>([]);
-  const [images] = useState(() => shuffleArray([...imagePairs]));
 
   const handleClick = async (index: number) => {
-    if (selected.length === 2 || matched.includes(index) || selected.includes(index)) return;
+    if (selected.length === 2 || matched.includes(index) || selected.includes(index))
+      return;
 
     if (selected.length === 1) {
       const firstIndex = selected[0];
       setSelected((prev) => [...prev, index]);
 
-      if (images[firstIndex] === images[index]) {
+      if (gameImages[firstIndex] === gameImages[index]) {
         setMatched((prev) => [...prev, firstIndex, index]);
         setSelected([]);
       } else {
@@ -92,7 +115,7 @@ export default function PhotoPairGame({
     <div className="grid grid-cols-9 gap-1 lg:gap-2 max-w-[95vw] mx-auto place-items-center">
       {/* Image preload */}
       <div className="hidden">
-        {images.map((image, i) => (
+        {gameImages.map((image, i) => (
           <Image
             key={i}
             src={image}
@@ -139,7 +162,7 @@ export default function PhotoPairGame({
                 style={{ backfaceVisibility: "hidden" }}
               >
                 <Image
-                  src={images[index]}
+                  src={gameImages[index]}
                   alt={`Imagen ${index + 1}`}
                   fill
                   className="rounded-sm lg:rounded-md object-cover"
